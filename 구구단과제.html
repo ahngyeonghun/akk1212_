@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>구구단 과제</title>
+</head>
+<body>
+    <h1>JS 반복문 - 구구단</h1>
+    <script>
+        let number = parseInt( prompt('몇 단까지 출력할까요? (2 ~ 9 입력)') );
+        for( let dan = 2 ; dan <= number ; dan++ ) {
+            document.write('<h3>' + dan + '단</h3>');
+
+            for( let i = 1 ; i <= 9 ; i++ ) {
+                document.write( dan + ' x ' + i + ' = ' + (dan * i) + '<br>' );
+            }
+        }
+    </script>
+</body>
+</html>
