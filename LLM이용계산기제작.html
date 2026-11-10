@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>나만의 계산기</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+    /* ===== 색상 변수: 여기 값만 바꾸면 전체 색이 바뀐다 ===== */
+    :root {
+        --bg: #eef0f4;          /* 페이지 배경 */
+        --card: #ffffff;        /* 계산기 카드 */
+        --text: #1d2130;        /* 기본 글자 */
+        --muted: #8a90a2;       /* 흐린 글자 */
+        --key: #f3f4f8;         /* 숫자 버튼 */
+        --key-hover: #e8eaf1;
+        --key-fn: #e6e8ef;      /* 기능 버튼 (AC, 괄호 등) */
+        --key-fn-text: #4a5066;
+        --accent: #4f6ef7;      /* 강조색 (= 버튼) */
+        --accent-soft: #e8edff; /* 연산자 버튼 배경 */
+        --accent-text: #3c56d6; /* 연산자 버튼 글자 */
+        --danger: #e5484d;      /* AC, 오류 */
+        --shadow: 0 20px 50px rgba(30, 40, 90, 0.12);
+    }
+    /* 어두운 테마: <html data-theme="dark"> 일 때 같은 변수에 다른 색을 넣는다 */
+    :root[data-theme="dark"] {
+        --bg: #0f1115;
+        --card: #191c23;
+        --text: #f1f3f8;
+        --muted: #7d8496;
+        --key: #242833;
+        --key-hover: #2e3341;
+        --key-fn: #303545;
+        --key-fn-text: #c3c8d6;
+        --accent: #6c87ff;
+        --accent-soft: #252d4d;
+        --accent-text: #a9b8ff;
+        --danger: #ff6b6f;
+        --shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+        margin: 0; padding: 32px 16px; min-height: 100vh;
+        background: var(--bg); color: var(--text);
+        font-family: "Outfit", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+        display: flex; justify-content: center; align-items: center;
+        transition: background 0.2s;
+    }
+
+    /* ===== 배치: 넓은 화면은 좌우, 좁은 화면은 위아래 ===== */
+    .wrap { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; align-items: flex-start; width: 100%; }
+    .card {
+        width: 100%; max-width: 340px; padding: 20px;
+        background: var(--card); border-radius: 28px; box-shadow: var(--shadow);
+        transition: background 0.2s;
+    }
+    .card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .card-head h1, .card-head h2 { margin: 0; font-size: 15px; font-weight: 600; color: var(--muted); }
+
+    .icon-btn, .text-btn { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-family: inherit; }
+    .icon-btn { width: 36px; height: 36px; border-radius: 50%; font-size: 18px; }
+    .text-btn { padding: 6px 10px; border-radius: 10px; font-size: 13px; }
+    .icon-btn:hover, .text-btn:hover { background: var(--key); color: var(--text); }
+
+    /* ===== 화면: 윗줄(미리보기·이전 식·오류), 아랫줄(입력 중인 식) ===== */
+    #screen { padding: 14px 6px 18px; text-align: right; }
+    #top {
+        min-height: 24px; font-size: 16px; color: var(--muted);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    #top.error { color: var(--danger); }
+    #main {
+        min-height: 58px; font-size: 46px; font-weight: 400; letter-spacing: -0.5px; line-height: 58px;
+        white-space: nowrap; overflow-x: auto; scrollbar-width: none;
+    }
+    #main::-webkit-scrollbar { display: none; }
+    #main.small { font-size: 31px; }   /* 식이 길어지면 글자를 줄인다 */
+    #main.tiny  { font-size: 22px; }
+
+    /* ===== 버튼: 가로 4칸 격자(grid) ===== */
+    #keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .key {
+        height: 58px; border: 0; border-radius: 18px; cursor: pointer;
+        font-family: inherit; font-size: 21px; font-weight: 400;
+        color: var(--text); background: var(--key);
+        transition: transform 0.08s, background 0.15s;
+    }
+    .key:hover { background: var(--key-hover); }
+    .key:active { transform: scale(0.94); }
+    .key:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .fn { background: var(--key-fn); color: var(--key-fn-text); font-size: 18px; }
+    .op { background: var(--accent-soft); color: var(--accent-text); font-size: 25px; }
+    .op:hover { background: var(--accent-soft); filter: brightness(0.96); }
+    .eq { background: var(--accent); color: #ffffff; font-size: 25px; }
+    .eq:hover { background: var(--accent); filter: brightness(1.08); }
+    #ac { color: var(--danger); font-weight: 500; }
+
+    /* ===== 계산 기록 ===== */
+    #history {
+        list-style: none; margin: 0; padding: 0; max-height: 380px; overflow-y: auto;
+        scrollbar-width: thin; scrollbar-color: var(--key-fn) transparent;   /* 스크롤바를 얇고 테마 색에 맞게 */
+    }
+    #history li { padding: 10px 12px; border-radius: 14px; text-align: right; cursor: pointer; }
+    #history li:hover { background: var(--key); }
+    #history .h-expr { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #history .h-res { font-size: 20px; }
+    #history li.empty { text-align: center; color: var(--muted); font-size: 13px; padding: 28px 0; cursor: default; }
+    #history li.empty:hover { background: transparent; }
+    .hint { margin: 12px 4px 0; font-size: 12px; line-height: 1.6; color: var(--muted); }
+</style>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+<script>
+    /* ============================================================
+       1. 상태(계산기가 기억하고 있는 값)
+       ============================================================ */
+    const OPS = "+−×÷";         // 연산자 기호 (화면에 보이는 기호를 그대로 쓴다)
+
+    let expr = "";              // 지금 입력 중인 식 (쉼표 없는 문자열). 예) "1200+300×2"
+    let justEvaluated = false;  // 방금 = 을 눌러서 결과가 화면에 떠 있는가?
+    let lastExpr = "";          // 방금 계산한 식 (윗줄에 "식 =" 으로 보여 준다)
+    let records = [];           // 계산 기록 [{ expr: "식", value: 결과 }, ...]
+
+    /* ============================================================
+       2. 토큰화(tokenize): 식 문자열을 "의미 단위"로 자른다
+          예) "12+3×4" → [숫자 12] [연산자 +] [숫자 3] [연산자 ×] [숫자 4]
+       ============================================================ */
+    function isDigit(ch) {
+        return ch !== undefined && ch.length == 1 && ch >= "0" && ch <= "9";
+    }
+
+    function tokenize(str) {
+        let tokens = [];
+        let i = 0;
+        while (i < str.length) {
+            let ch = str[i];
+            if (isDigit(ch) || ch == ".") {
+                // 숫자: 연속된 숫자와 소수점을 한 덩어리로 읽는다
+                let start = i;
+                while (i < str.length && (isDigit(str[i]) || str[i] == ".")) { i++; }
+                // 아주 크거나 작은 결과는 1.5E−7 (= 1.5×10^−7) 형태로 나오므로 그것도 읽는다
+                if (str[i] == "E") {
+                    i++;
+                    if (str[i] == "−") { i++; }
+                    while (i < str.length && isDigit(str[i])) { i++; }
+                }
+                let text = str.substring(start, i);
+                // 화면용 빼기 기호(−)를 자바스크립트가 아는 하이픈(-)으로 바꿔서 숫자로 변환
+                tokens.push({ type: "num", text: text, value: Number(text.replace("−", "-")) });
+                continue;
+            }
+            if (OPS.includes(ch)) { tokens.push({ type: "op", text: ch }); }
+            else if (ch == "(")   { tokens.push({ type: "open", text: ch }); }
+            else if (ch == ")")   { tokens.push({ type: "close", text: ch }); }
+            else if (ch == "√")   { tokens.push({ type: "root", text: ch }); }
+            else if (ch == "²")   { tokens.push({ type: "sq", text: ch }); }
+            else if (ch == "%")   { tokens.push({ type: "pct", text: ch }); }
+            else { throw new Error("알 수 없는 문자: " + ch); }
+            i++;
+        }
+        return tokens;
+    }
+
+    /* ============================================================
+       3. 계산(evaluate): 연산자 우선순위대로 계산한다
+          우선순위 낮음 → 높음:  + −  <  × ÷  <  부호(−)  <  ² %  <  숫자·괄호·√
+          각 단계 함수가 "자기보다 높은 단계"를 먼저 불러서 계산하므로
+          2+3×4 는 3×4 가 먼저 계산된다. (재귀 하강 파서라고 부른다)
+       ============================================================ */
+    function evaluate(str) {
+        let tokens = tokenize(str);
+        let pos = 0;   // 지금 보고 있는 토큰 위치
+
+        // 지금 위치의 토큰이 sym 기호인가?
+        function at(sym) {
+            return pos < tokens.length && tokens[pos].text == sym;
+        }
+
+        function parseExpr() {            // 덧셈, 뺄셈
+            let v = parseTerm();
+            while (at("+") || at("−")) {
+                let op = tokens[pos].text; pos++;
+                let start = pos;
+                let r = parseTerm();
+                // 200+10% 처럼 "숫자%" 하나만 더하거나 빼면 앞 값의 10% 로 계산한다 (200+10% = 220)
+                let isPercentOnly = (pos - start == 2) && tokens[start].type == "num" && tokens[start + 1].type == "pct";
+                if (isPercentOnly) { r = v * r; }
+                v = (op == "+") ? v + r : v - r;
+            }
+            return v;
+        }
+
+        function parseTerm() {            // 곱셈, 나눗셈
+            let v = parseUnary();
+            while (at("×") || at("÷")) {
+                let op = tokens[pos].text; pos++;
+                let r = parseUnary();
+                if (op == "×") {
+                    v = v * r;
+                } else {
+                    if (r == 0) { throw new Error("0으로 나눌 수 없습니다"); }
+                    v = v / r;
+                }
+            }
+            return v;
+        }
+
+        function parseUnary() {           // 음수 부호: −3
+            if (at("−")) { pos++; return -parseUnary(); }
+            return parsePostfix();
+        }
+
+        function parsePostfix() {         // 값 뒤에 붙는 기호: 5² = 25, 50% = 0.5
+            let v = parseAtom();
+            while (at("²") || at("%")) {
+                v = at("²") ? v * v : v / 100;
+                pos++;
+            }
+            return v;
+        }
+
+        function parseAtom() {            // 숫자, 괄호, 제곱근
+            let t = tokens[pos];
+            if (t === undefined) { throw new Error("식이 끝나지 않았습니다"); }
+
+            if (t.type == "num") {
+                if (isNaN(t.value)) { throw new Error("숫자 형식이 잘못되었습니다"); }
+                pos++;
+                return t.value;
+            }
+            if (t.type == "root") {
+                pos++;
+                let x = parseAtom();      // √ 뒤의 괄호 안을 먼저 계산
+                if (x < 0) { throw new Error("음수의 제곱근은 계산할 수 없습니다"); }
+                return Math.sqrt(x);
+            }
+            if (t.type == "open") {
+                pos++;
+                let v = parseExpr();
+                if (!at(")")) { throw new Error("괄호가 닫히지 않았습니다"); }
+                pos++;
+                return v;
+            }
+            throw new Error("식이 잘못되었습니다");
+        }
+
+        let result = parseExpr();
+        if (pos < tokens.length) { throw new Error("식이 잘못되었습니다"); }
+        if (!isFinite(result))   { throw new Error("표시할 수 없는 값입니다"); }
+        return result;
+    }
+
+    /* ============================================================
+       4. 표시 형식
+       ============================================================ */
+
+    // 결과 숫자 → 식에 넣을 문자열 (쉼표 없음)
+    function formatNumber(x) {
+        if (x == 0) { return "0"; }
+        // 정수는 그대로 두고, 소수는 toPrecision(12) 로 유효숫자 12자리 반올림
+        // → 0.1+0.2 = 0.30000000000000004 같은 오차 제거
+        let r = Number.isInteger(x) ? x : Number(x.toPrecision(12));
+        let s = (Math.abs(r) >= 1e15) ? r.toExponential() : String(r);
+        // 자바스크립트 표기(e+, e-, -)를 계산기 화면 표기(E, E−, −)로 바꾼다
+        return s.replace("e+", "E").replace("e-", "E−").replace("-", "−");
+    }
+
+    // 숫자 문자열의 정수 부분에 천 단위 쉼표를 넣는다. "1234567.5" → "1,234,567.5"
+    function addCommas(text) {
+        let parts = text.split("E");            // 지수 부분 분리
+        let numParts = parts[0].split(".");     // 정수, 소수 분리
+        let intPart = numParts[0];
+        let out = "";
+        for (let i = 0; i < intPart.length; i++) {
+            // 뒤에 남은 자릿수가 3의 배수일 때마다 쉼표
+            if (i > 0 && (intPart.length - i) % 3 == 0) { out += ","; }
+            out += intPart[i];
+        }
+        if (numParts.length > 1) { out += "." + numParts[1]; }
+        if (parts.length > 1)    { out += "E" + parts[1]; }
+        return out;
+    }
+
+    // 토큰이 "값"(숫자, 닫는 괄호, ², %)으로 끝나는 종류인가?
+    function isValue(t) {
+        if (!t) { return false; }
+        return t.type == "num" || t.type == "close" || t.type == "sq" || t.type == "pct";
+    }
+
+    // 식 문자열 → 화면에 보여 줄 모양 (쉼표 추가, 연산자 양옆에 공백)
+    function prettify(str) {
+        let tokens = tokenize(str);
+        let out = "";
+        for (let i = 0; i < tokens.length; i++) {
+            let t = tokens[i];
+            if (t.type == "num") {
+                out += addCommas(t.text);
+            } else if (t.type == "op" && isValue(tokens[i - 1])) {
+                out += " " + t.text + " ";      // 값 뒤의 연산자 = 일반 연산자 → 띄어 쓴다
+            } else {
+                out += t.text;                  // 음수 부호, 괄호 등은 붙여 쓴다
+            }
+        }
+        return out;
+    }
+
+    // 닫지 않은 괄호를 자동으로 닫은 식을 돌려준다
+    function closeParens(str) {
+        let opened = str.split("(").length - 1;     // "(" 개수
+        let closed = str.split(")").length - 1;     // ")" 개수
+        return str + ")".repeat(Math.max(0, opened - closed));
+    }
+
+    /* ============================================================
+       5. 화면 갱신
+       ============================================================ */
+    function showTop(text, isError) {
+        $("#top").text(text).toggleClass("error", isError);
+    }
+
+    // 입력 도중에 "지금 = 을 누르면 나올 값"을 미리 계산해서 돌려준다
+    function previewText() {
+        if (expr == "") { return ""; }
+        try {
+            let s = formatNumber(evaluate(closeParens(expr)));
+            if (s == expr) { return ""; }       // 숫자 하나만 있을 때는 미리보기 불필요
+            return "= " + prettify(s);
+        } catch (e) {
+            return "";                          // 아직 완성되지 않은 식이면 아무것도 안 보여 준다
+        }
+    }
+
+    function show() {
+        let text = (expr == "") ? "0" : prettify(expr);
+        let main = $("#main");
+        main.text(text);
+        main.toggleClass("small", text.length > 11);    // 길이에 따라 글자 크기 조절
+        main.toggleClass("tiny", text.length > 17);
+        main[0].scrollLeft = main[0].scrollWidth;       // 항상 오른쪽 끝(방금 입력한 곳)이 보이게
+
+        if (justEvaluated) {
+            showTop(prettify(lastExpr) + " =", false);  // 계산 직후: 윗줄에 계산한 식
+        } else {
+            showTop(previewText(), false);              // 입력 중: 윗줄에 결과 미리보기
+        }
+    }
+
+    function renderHistory() {
+        let list = $("#history");
+        list.empty();
+        if (records.length == 0) {
+            list.append($("<li>").addClass("empty").text("계산하면 여기에 기록이 쌓입니다"));
+            return;
+        }
+        for (let i = 0; i < records.length; i++) {
+            let li = $("<li>").attr("data-index", i);
+            li.append($("<div>").addClass("h-expr").text(prettify(records[i].expr)));
+            li.append($("<div>").addClass("h-res").text(prettify(formatNumber(records[i].value))));
+            list.append(li);
+        }
+    }
+
+    /* ============================================================
+       6. 저장: localStorage (브라우저에 남는 작은 저장소)
+          새로고침하거나 창을 닫았다 열어도 기록과 테마가 유지된다.
+          저장이 막힌 환경(사생활 보호 모드 등)에서도 계산기는 동작하도록 try 로 감싼다.
+       ============================================================ */
+    function saveData(key, value) {
+        try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { }
+    }
+    function loadData(key) {
+        try { return JSON.parse(localStorage.getItem(key)); } catch (e) { return null; }
+    }
+
+    function loadRecords() {
+        let saved = loadData("calc-records");
+        records = [];
+        if (!Array.isArray(saved)) { return; }
+        for (let i = 0; i < saved.length && records.length < 10; i++) {
+            let item = saved[i];
+            // 저장된 값이 깨져 있을 수 있으므로 형식을 확인하고 정상인 것만 쓴다
+            try {
+                if (typeof item.expr == "string" && typeof item.value == "number" && isFinite(item.value)) {
+                    tokenize(item.expr);
+                    records.push({ expr: item.expr, value: item.value });
+                }
+            } catch (e) { }
+        }
+    }
+
+    function applyTheme(theme) {
+        $("html").attr("data-theme", theme);
+        $("#theme").text(theme == "dark" ? "☀" : "☾");   // 누르면 바뀔 테마의 아이콘
+    }
+
+    /* ============================================================
+       7. 입력 처리: 버튼 종류마다 "지금 이 입력이 말이 되는가"를 검사한다
+       ============================================================ */
+
+    // 식의 마지막 토큰을 돌려준다 (식이 비었으면 null)
+    function lastTokenOf(str) {
+        let t = tokenize(str);
+        return t.length > 0 ? t[t.length - 1] : null;
+    }
+
+    // 결과가 떠 있는 상태에서 숫자나 괄호를 누르면 새 식을 시작한다
+    function startNewIfDone() {
+        if (justEvaluated) { expr = ""; justEvaluated = false; }
+    }
+
+    function inputDigit(d) {              // 숫자 0~9 와 소수점
+        startNewIfDone();
+        let t = lastTokenOf(expr);
+        if (t !== null && t.type == "num") {
+            if (d == "." && (t.text.includes(".") || t.text.includes("E"))) { return; }   // 소수점 중복 방지
+            if (t.text == "0" && d != ".") { expr = expr.slice(0, -1); }                  // "05" 대신 "5"
+        } else {
+            if (isValue(t)) { expr += "×"; }      // ")" 나 "%" 뒤의 숫자는 곱셈으로 처리: (2)3 → (2)×3
+            if (d == ".") { expr += "0"; }        // "." 만 누르면 "0." 으로
+        }
+        expr += d;
+        show();
+    }
+
+    function inputOp(op) {                // 연산자 + − × ÷
+        // 결과가 음수일 때 이어서 계산하면 괄호로 감싼다: −5 → (−5)×2
+        if (justEvaluated && expr[0] == "−") { expr = "(" + expr + ")"; }
+        let last = expr[expr.length - 1];
+
+        if (op == "−") {
+            if (expr == "" || last == "(" || last == "×" || last == "÷") {
+                expr += "−";                              // 음수 부호로 쓰는 경우: 5×−3
+            } else if (last == "+" || last == "−") {
+                expr = expr.slice(0, -1) + "−";           // + 뒤에 − 를 누르면 − 로 교체
+            } else if (isValue(lastTokenOf(expr))) {
+                expr += "−";                              // 일반 뺄셈
+            } else {
+                return;
+            }
+        } else {
+            // 연산자를 연달아 누르면 마지막에 누른 것으로 교체: "5+×" → "5×"
+            let temp = expr;
+            while (temp != "" && OPS.includes(temp[temp.length - 1])) { temp = temp.slice(0, -1); }
+            if (!isValue(lastTokenOf(temp))) { return; }  // 식 맨 앞이나 "(" 뒤에는 연산자를 못 넣는다
+            expr = temp + op;
+        }
+        justEvaluated = false;
+        show();
+    }
+
+    function inputOpen(text) {            // "(" 와 "√("
+        startNewIfDone();
+        if (isValue(lastTokenOf(expr))) { expr += "×"; }   // 2( → 2×(
+        expr += text;
+        show();
+    }
+
+    function inputClose() {               // ")"
+        // 열린 괄호가 남아 있고, 값으로 끝날 때만 닫을 수 있다
+        if (closeParens(expr) == expr || !isValue(lastTokenOf(expr))) { return; }
+        justEvaluated = false;
+        expr += ")";
+        show();
+    }
+
+    function inputPostfix(sym) {          // 값 뒤에 붙는 ² 와 %
+        if (justEvaluated && expr[0] == "−" && sym == "²") { expr = "(" + expr + ")"; }   // (−5)² = 25
+        let t = lastTokenOf(expr);
+        if (!isValue(t)) { return; }
+        if (sym == "%" && t.type == "pct") { return; }     // %% 방지
+        justEvaluated = false;
+        expr += sym;
+        show();
+    }
+
+    function toggleSign() {               // ± : 마지막 숫자의 부호를 바꾼다
+        justEvaluated = false;
+        let t = lastTokenOf(expr);
+        if (t === null || t.type != "num") { show(); return; }
+
+        let before = expr.slice(0, expr.length - t.text.length);   // 마지막 숫자 앞부분
+        let b1 = before[before.length - 1];    // 숫자 바로 앞 글자
+        let b2 = before[before.length - 2];
+        let b3 = before[before.length - 3];
+        let minusIsSign = (b1 == "−") && (b2 === undefined || b2 == "(" || b2 == "×" || b2 == "÷");
+
+        if (minusIsSign) {
+            // 이미 음수 → 양수로. ± 가 넣었던 "(−" 는 괄호까지 함께 지운다
+            if (b2 == "(" && (b3 == "+" || b3 == "−")) { before = before.slice(0, -2); }
+            else { before = before.slice(0, -1); }
+        } else if (before == "" || b1 == "(" || b1 == "×" || b1 == "÷") {
+            before += "−";                     // 5 → −5,  2×5 → 2×−5
+        } else {
+            before += "(−";                    // 2+5 → 2+(−5   (괄호는 = 누를 때 자동으로 닫힌다)
+        }
+        expr = before + t.text;
+        show();
+    }
+
+    function backspace() {                // ⌫ 한 글자 지우기
+        if (expr == "") { return; }
+        justEvaluated = false;
+        expr = expr.slice(0, -1);
+        // 1.5E−7 같은 결과를 지우다가 "1.5E−" 처럼 어중간하게 남지 않게 정리
+        if (expr.endsWith("E−")) { expr = expr.slice(0, -2); }
+        if (expr.endsWith("E"))  { expr = expr.slice(0, -1); }
+        show();
+    }
+
+    function clearAll() {                 // AC
+        expr = ""; lastExpr = ""; justEvaluated = false;
+        show();
+    }
+
+    function calculate() {                // =
+        if (expr == "" || justEvaluated) { return; }
+        let full = closeParens(expr);     // 닫지 않은 괄호는 자동으로 닫아 준다
+        try {
+            let value = evaluate(full);
+            let text = formatNumber(value);
+            if (text == full) { return; }             // 숫자 하나뿐이면 계산할 것이 없다
+
+            records.unshift({ expr: full, value: value });   // 기록 맨 앞에 추가
+            if (records.length > 10) { records.pop(); }      // 10개까지만 보관
+            saveData("calc-records", records);
+            renderHistory();
+
+            lastExpr = full;
+            expr = text;
+            justEvaluated = true;
+            show();
+        } catch (e) {
+            // 오류가 나도 식은 지우지 않는다 → ⌫ 로 고쳐서 다시 계산할 수 있다
+            showTop(e.message, true);
+        }
+    }
+
+    /* ============================================================
+       8. 이벤트 연결 (버튼 클릭, 키보드)
+       ============================================================ */
+    $(document).ready(function () {
+        // attr("data-val"): 버튼 태그에 적어 둔 data-val 값을 문자열 그대로 읽는다
+        $(".num").click(function ()  { inputDigit($(this).attr("data-val")); });
+        $(".op").click(function ()   { inputOp($(this).attr("data-val")); });
+        $(".open").click(function () { inputOpen($(this).attr("data-val")); });
+        $(".post").click(function () { inputPostfix($(this).attr("data-val")); });
+        $("#close").click(inputClose);
+        $("#sign").click(toggleSign);
+        $("#bs").click(backspace);
+        $("#ac").click(clearAll);
+        $("#eq").click(calculate);
+
+        // 기록을 누르면 그 계산을 다시 불러온다
+        $("#history").on("click", "li", function () {
+            let idx = $(this).attr("data-index");
+            if (idx === undefined) { return; }
+            let item = records[Number(idx)];
+            lastExpr = item.expr;
+            expr = formatNumber(item.value);
+            justEvaluated = true;
+            show();
+        });
+
+        $("#clear-history").click(function () {
+            records = [];
+            saveData("calc-records", records);
+            renderHistory();
+        });
+
+        // 테마 전환 (선택한 테마는 저장해 둔다)
+        $("#theme").click(function () {
+            let next = ($("html").attr("data-theme") == "dark") ? "light" : "dark";
+            applyTheme(next);
+            saveData("calc-theme", next);
+        });
+
+        // 키보드 입력
+        $(document).keydown(function (e) {
+            if (e.ctrlKey || e.metaKey || e.altKey) { return; }   // Ctrl+R 같은 단축키는 건드리지 않는다
+            let k = e.key;
+            let handled = true;
+            if (isDigit(k) || k == ".")            { inputDigit(k); }
+            else if (k == "+")                     { inputOp("+"); }
+            else if (k == "-")                     { inputOp("−"); }
+            else if (k == "*")                     { inputOp("×"); }
+            else if (k == "/")                     { inputOp("÷"); }
+            else if (k == "(")                     { inputOpen("("); }
+            else if (k == ")")                     { inputClose(); }
+            else if (k == "%")                     { inputPostfix("%"); }
+            else if (k == "Enter" || k == "=")     { calculate(); }
+            else if (k == "Backspace")             { backspace(); }
+            else if (k == "Escape")                { clearAll(); }
+            else                                   { handled = false; }
+            // 처리한 키는 브라우저 기본 동작(Enter로 버튼이 눌리는 것 등)을 막는다
+            if (handled) { e.preventDefault(); }
+        });
+
+        // 시작: 저장된 테마(없으면 기기 설정)와 기록을 불러온다
+        let savedTheme = loadData("calc-theme");
+        if (savedTheme != "dark" && savedTheme != "light") {
+            savedTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        }
+        applyTheme(savedTheme);
+        loadRecords();
+        renderHistory();
+        show();
+    });
+</script>
+</head>
+<body>
+    <main class="wrap">
+        <!-- 계산기 -->
+        <section class="card" id="calc">
+            <header class="card-head">
+                <h1>계산기</h1>
+                <button class="icon-btn" id="theme" title="밝은 테마 / 어두운 테마 전환">☾</button>
+            </header>
+
+            <div id="screen">
+                <div id="top"></div>
+                <div id="main">0</div>
+            </div>
+
+            <div id="keys">
+                <button class="key fn" id="ac">AC</button>
+                <button class="key fn open" data-val="(">(</button>
+                <button class="key fn" id="close">)</button>
+                <button class="key fn" id="bs" title="한 글자 지우기">⌫</button>
+
+                <button class="key fn open" data-val="√(" title="제곱근">√</button>
+                <button class="key fn post" data-val="²" title="제곱">x²</button>
+                <button class="key fn post" data-val="%" title="퍼센트">%</button>
+                <button class="key op" data-val="÷">÷</button>
+
+                <button class="key num" data-val="7">7</button>
+                <button class="key num" data-val="8">8</button>
+                <button class="key num" data-val="9">9</button>
+                <button class="key op" data-val="×">×</button>
+
+                <button class="key num" data-val="4">4</button>
+                <button class="key num" data-val="5">5</button>
+                <button class="key num" data-val="6">6</button>
+                <button class="key op" data-val="−">−</button>
+
+                <button class="key num" data-val="1">1</button>
+                <button class="key num" data-val="2">2</button>
+                <button class="key num" data-val="3">3</button>
+                <button class="key op" data-val="+">+</button>
+
+                <button class="key" id="sign" title="부호 바꾸기">±</button>
+                <button class="key num" data-val="0">0</button>
+                <button class="key num" data-val=".">.</button>
+                <button class="key eq" id="eq">=</button>
+            </div>
+        </section>
+
+        <!-- 계산 기록 -->
+        <section class="card" id="side">
+            <header class="card-head">
+                <h2>계산 기록</h2>
+                <button class="text-btn" id="clear-history">지우기</button>
+            </header>
+            <ul id="history"></ul>
+            <p class="hint">
+                기록을 누르면 그 결과를 다시 불러옵니다.<br>
+                키보드: 숫자, + - * / ( ) %, Enter(=), Backspace(⌫), Esc(AC)
+            </p>
+        </section>
+    </main>
+</body>
+</html>
