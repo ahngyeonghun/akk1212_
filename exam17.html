@@ -14,16 +14,6 @@
 </style>
 <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
 <script>
-    function findOp(str) {
-        for (let i = 1; i < str.length; i++) {
-            let ch = str[i];
-            if (ch == "+" || ch == "-" || ch == "*" || ch == "/") {
-                return i;
-            }
-        }
-        return -1;
-    }
-
     $(document).ready(function(){
         $(".num").click(function(){
             let cur = $("#disp2").val();
@@ -34,47 +24,13 @@
             let cur = $("#disp2").val();
             let n = $(this).val();
             if( n != "=") {
-                if (cur == "" || findOp(cur) != -1) {
-                    return;
-                }
                 $("#disp2").val(cur+n);
             }
             else{
-                let pos = findOp(cur);
-                if (pos == -1 || pos == cur.length - 1) {
-                    return;
-                }
-                let a = Number(cur.substring(0, pos));
-                let op = cur[pos];
-                let b = Number(cur.substring(pos + 1));
-                let result;
-
-                switch (op) {
-                    case "+":
-                        result = a + b;
-                        break;
-                    case "-":
-                        result = a - b;
-                        break;
-                    case "*":
-                        result = a * b;
-                        break;
-                    case "/":
-                        if (b == 0) {
-                            result = "오류";
-                        } else {
-                            result = a / b;
-                        }
-                        break;
-                }
-
+                let result = eval(cur);
                 $("#disp1").val(cur);
                 $("#disp2").val(result);
             }
-        });
-        $(".func").click(function(){
-            $("#disp1").val("");
-            $("#disp2").val("");
         });
     });
     
