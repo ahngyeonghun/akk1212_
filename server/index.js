@@ -20,12 +20,9 @@ const server = http.createServer((req,res) => {
     const readStream = fs.createReadStream(__dirname+"/index.html", "utf-8");
     readStream.pipe(res);
 
-
-
-
 });
 //서버 실행
 server.listen(3000, ()=>{
-    console.log(`${PORT}("3000번 포트로 서버 실행");
+    console.log(`${PORT}번 포트로 서버 실행`);
 
 });
